@@ -1,4 +1,4 @@
-# JALA Tolk IA — V1
+# JALA Tolk IA — V1.
 
 Personal English speaking coach.
 
