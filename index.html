@@ -108,10 +108,20 @@ async function send(){
     const data=await r.json(); if(!r.ok) throw new Error(data.error||"Request failed");
     const reply=data.reply||"Let's continue.";
     addMsg(reply,"ai",data.feedback||"");
-    state.history.push({role:"user",text},{role:"assistant",text:reply});
+    state.history.push(
+  {role:"user",content:text},
+  {role:"assistant",content:reply}
+);
     if(data.error_to_remember) state.errors.push(data.error_to_remember);
     save(); speak(reply); $("status").textContent="Ready.";
-  }catch(e){addMsg("I couldn't connect to the AI yet. Check that GEMINI_API_KEY is configured on Vercel.","ai","<span class='danger'>Setup needed:</span> deploy the project and add your Gemini API key as an environment variable.");$("status").textContent=e.message;}
+}catch(e){
+  console.error("JALA Tolk error:",e);
+  addMsg(
+    "I couldn't connect to the AI yet.",
+    "ai",
+    "<span class='danger'>Error:</span> "+(e.message||"Unknown error")
+  );
+  $("status").textContent="Connection error.";
 }
 $("send").onclick=send;
 $("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}});
