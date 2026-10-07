@@ -1,5 +1,4 @@
-const MODEL = "gemini-3.7-flash";
-
+const MODEL = "gemini-3.8-flash";
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
