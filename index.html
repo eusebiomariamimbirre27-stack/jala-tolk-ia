@@ -123,7 +123,7 @@ async function send(){
   );
   $("status").textContent="Connection error.";
 }
-$("send").onclick=send;
+document.getElementById("send").addEventListener("click", send);;
 $("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}});
 $("level").onchange=e=>{state.level=e.target.value;save()};
 $("mode").onchange=e=>{state.mode=e.target.value;save()};
