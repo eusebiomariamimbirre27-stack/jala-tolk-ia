@@ -67,80 +67,282 @@
 </div>
 
 <script>
-const $=id=>document.getElementById(id);
-const state=JSON.parse(localStorage.getItem("jalaTolkState")||'{"turns":0,"minutes":0,"streak":0,"lastDay":"","level":"B1","mode":"conversation","history":[],"errors":[]}');
-let voiceOn=true, recognition=null, listening=false;
+const $ = id => document.getElementById(id);
 
-function save(){localStorage.setItem("jalaTolkState",JSON.stringify(state)); renderStats();}
-function renderStats(){ $("minutes").textContent=state.minutes; $("turns").textContent=state.turns; $("streak").textContent=state.streak; $("level").value=state.level; $("mode").value=state.mode; }
+let state;
 
-function addMsg(text,who="ai",feedback=""){
-  const box=document.createElement("div"); box.className="msg "+who; box.textContent=text;
-  if(feedback){const f=document.createElement("div");f.className="feedback";f.innerHTML=feedback;box.appendChild(f)}
-  $("chat").appendChild(box); window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
+try {
+  state = JSON.parse(
+    localStorage.getItem("jalaTolkState") ||
+    '{"turns":0,"minutes":0,"streak":0,"lastDay":"","level":"B1","mode":"conversation","history":[],"errors":[]}'
+  );
+} catch (e) {
+  state = {
+    turns: 0,
+    minutes: 0,
+    streak: 0,
+    lastDay: "",
+    level: "B1",
+    mode: "conversation",
+    history: [],
+    errors: []
+  };
 }
-function speak(text){
-  if(!voiceOn || !("speechSynthesis" in window)) return;
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text); u.lang="en-US"; u.rate=.95; u.pitch=1.05;
-  const voices=speechSynthesis.getVoices();
-  const female=voices.find(v=>/en-US|en-GB|en-AU/i.test(v.lang) && /female|Samantha|Google US English|Microsoft Zira|Karen|Victoria/i.test(v.name));
-  if(female) u.voice=female;
-  speechSynthesis.speak(u);
+
+state.history = Array.isArray(state.history) ? state.history : [];
+state.errors = Array.isArray(state.errors) ? state.errors : [];
+
+let voiceOn = true;
+let recognition = null;
+let listening = false;
+
+function save() {
+  localStorage.setItem("jalaTolkState", JSON.stringify(state));
+  renderStats();
 }
-function firstMessage(){
-  if(!$("chat").children.length){
-    const text="Hi! I'm JALA Tolk. I'm here to help you speak English. Let's start easy: tell me about your day in 3 sentences.";
-    addMsg(text); speak(text);
+
+function renderStats() {
+  $("minutes").textContent = state.minutes;
+  $("turns").textContent = state.turns;
+  $("streak").textContent = state.streak;
+  $("level").value = state.level;
+  $("mode").value = state.mode;
+}
+
+function addMsg(text, who, feedback) {
+  const box = document.createElement("div");
+  box.className = "msg " + (who || "ai");
+  box.textContent = text;
+
+  if (feedback) {
+    const f = document.createElement("div");
+    f.className = "feedback";
+    f.innerHTML = feedback;
+    box.appendChild(f);
+  }
+
+  $("chat").appendChild(box);
+
+  window.scrollTo({
+    top: document.body.scrollHeight,
+    behavior: "smooth"
+  });
+}
+
+function speak(text) {
+  if (!voiceOn) return;
+  if (!("speechSynthesis" in window)) return;
+
+  window.speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  u.rate = 0.95;
+  u.pitch = 1.05;
+
+  window.speechSynthesis.speak(u);
+}
+
+function firstMessage() {
+  if ($("chat").children.length === 0) {
+    const text =
+      "Hi! I'm JALA Tolk. I'm here to help you speak English. Let's start easy: tell me about your day in 3 sentences.";
+
+    addMsg(text, "ai");
+    speak(text);
   }
 }
-function updateDay(){
-  const today=new Date().toISOString().slice(0,10);
-  if(state.lastDay!==today){state.streak=state.lastDay ? state.streak+1 : 1;state.lastDay=today;save();}
+
+function updateDay() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (state.lastDay !== today) {
+    state.streak = state.lastDay ? state.streak + 1 : 1;
+    state.lastDay = today;
+  }
 }
-async function send(){
-  const text=$("input").value.trim(); if(!text)return;
-  addMsg(text,"user"); $("input").value=""; $("status").textContent="JALA Tolk is thinking...";
-  state.turns++; state.minutes=Math.max(state.minutes,Math.ceil(state.turns*1.2)); updateDay(); save();
-  try{
-    const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({message:text,level:state.level,mode:state.mode,history:state.history.slice(-8),errors:state.errors.slice(-12)})});
-    const data=await r.json(); if(!r.ok) throw new Error(data.error||"Request failed");
-    const reply=data.reply||"Let's continue.";
-    addMsg(reply,"ai",data.feedback||"");
-    state.history.push(
-  {role:"user",content:text},
-  {role:"assistant",content:reply}
-);
-    if(data.error_to_remember) state.errors.push(data.error_to_remember);
-    save(); speak(reply); $("status").textContent="Ready.";
-}catch(e){
-  console.error("JALA Tolk error:",e);
-  addMsg(
-    "I couldn't connect to the AI yet.",
-    "ai",
-    "<span class='danger'>Error:</span> "+(e.message||"Unknown error")
+
+async function send() {
+  const input = $("input");
+  const text = input.value.trim();
+
+  if (!text) {
+    $("status").textContent = "Type something in English first.";
+    return;
+  }
+
+  addMsg(text, "user");
+
+  input.value = "";
+
+  $("status").textContent = "JALA Tolk is thinking...";
+
+  state.turns++;
+  state.minutes = Math.max(
+    state.minutes,
+    Math.ceil(state.turns * 1.2)
   );
-  $("status").textContent="Connection error.";
+
+  updateDay();
+  save();
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: text,
+        level: state.level,
+        mode: state.mode,
+        history: state.history.slice(-8),
+        errors: state.errors.slice(-12)
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.feedback ||
+        data.error ||
+        "API request failed."
+      );
+    }
+
+    const reply = data.reply || "Let's continue.";
+
+    addMsg(
+      reply,
+      "ai",
+      data.feedback || ""
+    );
+
+    state.history.push(
+      {
+        role: "user",
+        content: text
+      },
+      {
+        role: "assistant",
+        content: reply
+      }
+    );
+
+    if (data.error_to_remember) {
+      state.errors.push(data.error_to_remember);
+    }
+
+    save();
+
+    speak(reply);
+
+    $("status").textContent = "Ready.";
+
+  } catch (error) {
+
+    console.error("JALA Tolk error:", error);
+
+    addMsg(
+      "I couldn't connect to JALA Tolk.",
+      "ai",
+      "<span class='danger'>Error:</span> " +
+      (error.message || "Unknown error")
+    );
+
+    $("status").textContent = "Connection error.";
+  }
 }
-document.getElementById("send").addEventListener("click", send);;
-$("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}});
-$("level").onchange=e=>{state.level=e.target.value;save()};
-$("mode").onchange=e=>{state.mode=e.target.value;save()};
-$("speakToggle").onclick=()=>{voiceOn=!voiceOn;$("speakToggle").textContent=voiceOn?"🔊 Voice: ON":"🔇 Voice: OFF";};
 
-if("webkitSpeechRecognition" in window || "SpeechRecognition" in window){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition; recognition=new SR();
-  recognition.lang="en-US"; recognition.interimResults=true; recognition.continuous=false;
-  recognition.onstart=()=>{listening=true;$("mic").classList.add("active");$("status").textContent="Listening... speak in English."};
-  recognition.onend=()=>{listening=false;$("mic").classList.remove("active");$("status").textContent="Ready."};
-  recognition.onerror=()=>{$("status").textContent="Microphone recognition error. You can type instead."};
-  recognition.onresult=e=>{let t="";for(let i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;$("input").value=t;};
-  $("mic").onclick=()=>listening?recognition.stop():recognition.start();
-}else{$("mic").disabled=true;$("status").textContent="Voice input is not supported by this browser. Type instead.";}
+$("send").addEventListener("click", send);
 
-speechSynthesis?.addEventListener?.("voiceschanged",()=>{});
-renderStats(); firstMessage();
+$("input").addEventListener("keydown", function(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+$("level").addEventListener("change", function(e) {
+  state.level = e.target.value;
+  save();
+});
+
+$("mode").addEventListener("change", function(e) {
+  state.mode = e.target.value;
+  save();
+});
+
+$("speakToggle").addEventListener("click", function() {
+  voiceOn = !voiceOn;
+
+  $("speakToggle").textContent =
+    voiceOn ? "🔊 Voice: ON" : "🔇 Voice: OFF";
+});
+
+if ("webkitSpeechRecognition" in window ||
+    "SpeechRecognition" in window) {
+
+  const SR =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  recognition = new SR();
+
+  recognition.lang = "en-US";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  recognition.onstart = function() {
+    listening = true;
+    $("mic").classList.add("active");
+    $("status").textContent =
+      "Listening... speak in English.";
+  };
+
+  recognition.onend = function() {
+    listening = false;
+    $("mic").classList.remove("active");
+    $("status").textContent = "Ready.";
+  };
+
+  recognition.onerror = function() {
+    $("status").textContent =
+      "Microphone error. You can type instead.";
+  };
+
+  recognition.onresult = function(e) {
+    let transcript = "";
+
+    for (
+      let i = e.resultIndex;
+      i < e.results.length;
+      i++
+    ) {
+      transcript += e.results[i][0].transcript;
+    }
+
+    $("input").value = transcript;
+  };
+
+  $("mic").addEventListener("click", function() {
+    if (listening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  });
+
+} else {
+
+  $("mic").disabled = true;
+  $("status").textContent =
+    "Voice input is not supported. Type instead.";
+}
+
+renderStats();
+firstMessage();
 </script>
 </body>
 </html>
